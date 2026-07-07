@@ -1,0 +1,11 @@
+{
+  "name": "ClaudeDeck",
+  "author": "nickalie",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["claude", "ai", "chat", "assistant"],
+    "description": "Chat with Claude AI from SteamOS Game Mode via Claude CLI",
+    "image": ""
+  }
+}
