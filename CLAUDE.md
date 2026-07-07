@@ -82,6 +82,7 @@ pnpm build && pnpm test && pnpm lint && make test && make lint
 ## Deployment
 
 Plugin directory on Deck is owned by root, so files must be copied via temp dir then moved with sudo.
+`sudo` on SteamOS requires a password via stdin (`echo '<pass>' | sudo -S`), and glob (`*`) doesn't expand inside `sudo -S bash -c '...'` — use `cp -r /src/. /dst/` instead.
 
 ```bash
 # 1. Rsync to temp dir (exclude dev-only files)
@@ -98,14 +99,16 @@ rsync -avz \
   deck@steamdeck:/tmp/ClaudeDeck_deploy/
 
 # 2. Copy to plugin dir with sudo and restart
+# Note: use `cp -r src/.` (dot) instead of `src/*` — glob won't expand inside sudo -S bash -c
+# Note: pipe password to sudo -S since there's no interactive TTY
 ssh deck@steamdeck \
-  "sudo cp -r /tmp/ClaudeDeck_deploy/* ~/homebrew/plugins/ClaudeDeck/ && \
-   sudo systemctl restart plugin_loader.service && \
+  "echo '<pass>' | sudo -S cp -r /tmp/ClaudeDeck_deploy/. ~/homebrew/plugins/ClaudeDeck/ && \
+   echo '<pass>' | sudo -S systemctl restart plugin_loader.service && \
    rm -rf /tmp/ClaudeDeck_deploy"
 
 # 3. Verify
 ssh deck@steamdeck \
-  "sudo cat \"\$(ls -dt ~/homebrew/logs/ClaudeDeck/*.log | head -1)\""
+  "echo '<pass>' | sudo -S bash -c 'cat \"\$(ls -dt /home/deck/homebrew/logs/ClaudeDeck/*.log | head -1)\"'"
 # Should show: "ClaudeDeck backend ready"
 ```
 

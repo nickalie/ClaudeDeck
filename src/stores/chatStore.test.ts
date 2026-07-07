@@ -14,7 +14,19 @@ vi.mock("@decky/api", () => ({
   toaster: { toast: mockToast },
 }));
 
+vi.mock("@decky/ui", () => ({
+  Router: { MainRunningApp: undefined },
+}));
+
 import { useChatStore, _resetForTesting } from "./chatStore";
+
+async function waitForDone(timeoutMs = 500): Promise<void> {
+  const start = Date.now();
+  while (useChatStore.getState().sending) {
+    if (Date.now() - start > timeoutMs) throw new Error("Timed out waiting for sending=false");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
 
 beforeEach(() => {
   _resetForTesting();
@@ -129,7 +141,10 @@ describe("chatStore", () => {
 
   describe("deleteConversation", () => {
     it("deletes and clears active if same", async () => {
-      useChatStore.setState({ activeConversationId: "abc", messages: [{ role: "user", content: "x", timestamp: 1 }] });
+      useChatStore.setState({
+        activeConversationId: "abc",
+        messages: [{ role: "user", content: "x", timestamp: 1 }],
+      });
       mockApiFns["delete_conversation"].mockResolvedValue({ status: "ok" });
       mockApiFns["get_conversations"].mockResolvedValue([]);
 
@@ -151,7 +166,7 @@ describe("chatStore", () => {
   });
 
   describe("sendMessage", () => {
-    it("auto-creates conversation if none active", async () => {
+    it("auto-creates conversation if none active and streams items", async () => {
       const conv = {
         id: "auto1",
         title: "Новый чат",
@@ -164,13 +179,18 @@ describe("chatStore", () => {
         status: "ok",
         conversation: conv,
       });
-      mockApiFns["send_message"].mockResolvedValue({
-        status: "ok",
-        response: "Hello!",
+      mockApiFns["send_message"].mockResolvedValue({ status: "streaming" });
+      mockApiFns["get_stream"].mockResolvedValue({
+        items: [{ type: "text", content: "Hello!" }],
+        done: true,
+        error: null,
+        session_id: "s1",
+        cost_usd: 0,
       });
       mockApiFns["get_conversations"].mockResolvedValue([]);
 
       await useChatStore.getState().sendMessage("Hi");
+      await waitForDone();
 
       const state = useChatStore.getState();
       expect(state.messages).toHaveLength(2);
@@ -178,22 +198,43 @@ describe("chatStore", () => {
       expect(state.messages[0].content).toBe("Hi");
       expect(state.messages[1].role).toBe("assistant");
       expect(state.messages[1].content).toBe("Hello!");
+      expect(state.messages[1].item_type).toBe("text");
       expect(state.sending).toBe(false);
     });
 
-    it("sends to existing conversation", async () => {
+    it("streams multiple items as separate messages", async () => {
       useChatStore.setState({ activeConversationId: "exist1" });
-      mockApiFns["send_message"].mockResolvedValue({
-        status: "ok",
-        response: "Response",
+      mockApiFns["send_message"].mockResolvedValue({ status: "streaming" });
+      mockApiFns["get_stream"].mockResolvedValue({
+        items: [
+          { type: "text", content: "Let me check." },
+          {
+            type: "tool_use",
+            tool_name: "Bash",
+            tool_input: { command: "ls" },
+            tool_use_id: "t1",
+          },
+          { type: "tool_result", content: "file.txt", tool_use_id: "t1" },
+          { type: "text", content: "Found it." },
+        ],
+        done: true,
+        error: null,
+        session_id: null,
+        cost_usd: 0,
       });
       mockApiFns["get_conversations"].mockResolvedValue([]);
 
-      await useChatStore.getState().sendMessage("Question");
+      await useChatStore.getState().sendMessage("Check");
+      await waitForDone();
 
-      const state = useChatStore.getState();
-      expect(state.messages).toHaveLength(2);
-      expect(mockApiFns["send_message"]).toHaveBeenCalledWith("exist1", "Question");
+      const msgs = useChatStore.getState().messages;
+      expect(msgs).toHaveLength(5);
+      expect(msgs[0].role).toBe("user");
+      expect(msgs[1].item_type).toBe("text");
+      expect(msgs[2].item_type).toBe("tool_use");
+      expect(msgs[2].tool_name).toBe("Bash");
+      expect(msgs[3].item_type).toBe("tool_result");
+      expect(msgs[4].item_type).toBe("text");
     });
 
     it("shows toast on backend error", async () => {
@@ -206,9 +247,13 @@ describe("chatStore", () => {
 
       await useChatStore.getState().sendMessage("Hello");
 
-      expect(mockToast).toHaveBeenCalled();
-      // User message still added optimistically
-      expect(useChatStore.getState().messages).toHaveLength(1);
+      // User message saved optimistically; error added as assistant message
+      const msgs = useChatStore.getState().messages;
+      expect(msgs).toHaveLength(2);
+      expect(msgs[0].role).toBe("user");
+      expect(msgs[1].role).toBe("assistant");
+      expect(msgs[1].content).toContain("CLI not found");
+      expect(useChatStore.getState().sending).toBe(false);
     });
 
     it("handles network error", async () => {
@@ -218,8 +263,28 @@ describe("chatStore", () => {
 
       await useChatStore.getState().sendMessage("Hello");
 
-      expect(mockToast).toHaveBeenCalled();
       expect(useChatStore.getState().sending).toBe(false);
+      const msgs = useChatStore.getState().messages;
+      expect(msgs[msgs.length - 1].role).toBe("assistant");
+    });
+
+    it("shows error when stream finishes with error and no items", async () => {
+      useChatStore.setState({ activeConversationId: "exist1" });
+      mockApiFns["send_message"].mockResolvedValue({ status: "streaming" });
+      mockApiFns["get_stream"].mockResolvedValue({
+        items: [],
+        done: true,
+        error: "Auth failed",
+        session_id: null,
+        cost_usd: 0,
+      });
+      mockApiFns["get_conversations"].mockResolvedValue([]);
+
+      await useChatStore.getState().sendMessage("Hi");
+      await waitForDone();
+
+      const msgs = useChatStore.getState().messages;
+      expect(msgs[msgs.length - 1].content).toContain("Auth failed");
     });
   });
 

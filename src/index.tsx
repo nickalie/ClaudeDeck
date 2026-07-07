@@ -10,6 +10,7 @@ import {
 import { FaComments } from "react-icons/fa";
 import { ChatView } from "./components/ChatView";
 import { HistoryView } from "./components/HistoryView";
+import { SettingsView } from "./components/SettingsView";
 import { useChatStore } from "./stores/chatStore";
 
 const ROUTE = "/claudedeck";
@@ -33,6 +34,11 @@ function ClaudeDeckPage() {
             id: "history",
             title: "История",
             content: <HistoryView />,
+          },
+          {
+            id: "settings",
+            title: "Настройки",
+            content: <SettingsView />,
           },
         ]}
       />
