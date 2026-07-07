@@ -95,19 +95,19 @@ rsync -avz \
   --exclude='pnpm-lock.yaml' --exclude='Makefile' --exclude='pyproject.toml' \
   --exclude='CLAUDE.md' --exclude='.claude' --exclude='.ruff_cache' \
   -e 'ssh -o StrictHostKeyChecking=no' \
-  /home/nick/develop/projects/my/steamos/ClaudeDeck/ \
-  deck@steamdeck:/tmp/ClaudeDeck_deploy/
+  /path/to/ClaudeDeck/ \
+  deck@steamdeck.local:/tmp/ClaudeDeck_deploy/
 
 # 2. Copy to plugin dir with sudo and restart
 # Note: use `cp -r src/.` (dot) instead of `src/*` — glob won't expand inside sudo -S bash -c
 # Note: pipe password to sudo -S since there's no interactive TTY
-ssh deck@steamdeck \
+ssh deck@steamdeck.local \
   "echo '<pass>' | sudo -S cp -r /tmp/ClaudeDeck_deploy/. ~/homebrew/plugins/ClaudeDeck/ && \
    echo '<pass>' | sudo -S systemctl restart plugin_loader.service && \
    rm -rf /tmp/ClaudeDeck_deploy"
 
 # 3. Verify
-ssh deck@steamdeck \
+ssh deck@steamdeck.local \
   "echo '<pass>' | sudo -S bash -c 'cat \"\$(ls -dt /home/deck/homebrew/logs/ClaudeDeck/*.log | head -1)\"'"
 # Should show: "ClaudeDeck backend ready"
 ```

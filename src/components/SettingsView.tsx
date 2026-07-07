@@ -88,7 +88,7 @@ export function SettingsView() {
           onChange={(e) => setDraft({ ...draft, http_proxy: e.target.value })}
         />
         <div style={STYLES.hint}>
-          Прокси для Claude CLI и загрузки картинок (например http://192.168.50.1:3128)
+          Прокси для Claude CLI и загрузки картинок (например http://192.168.1.100:3128)
         </div>
       </div>
 
