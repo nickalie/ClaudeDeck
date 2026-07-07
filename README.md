@@ -54,6 +54,70 @@ system, so it can *do* the thing, not only tell you how.
 - A Steam Deck (or other SteamOS device) with [Decky Loader](https://decky.xyz/) installed.
 - The `claude` CLI installed and authenticated on the device, reachable from the plugin's `PATH` or configured explicitly in settings.
 
+## Installing the Claude CLI on Steam Deck
+
+SteamOS has a **read-only root filesystem that is wiped on every system update**,
+so anything installed into `/usr` (including a global `npm` package) disappears
+after the next update. The trick is to install the CLI **into your home
+directory** (`~/.local/`), which is on a persistent partition and survives
+updates. No need to unlock the rootfs.
+
+Everything below is done in a terminal — either in **Desktop Mode** (Konsole) or
+over SSH.
+
+### Option A — native installer (recommended)
+
+The official installer drops a self-contained binary into `~/.local/bin`, which
+already survives updates:
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+Make sure `~/.local/bin` is on your `PATH` (it usually is; add this to
+`~/.bashrc` if `claude` isn't found):
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+> The plugin's backend already prepends `~/.local/bin` to the `PATH` it uses to
+> launch the CLI, so a binary there is found even if your login shell wouldn't.
+
+### Option B — npm into your home directory
+
+If you prefer npm, point its global prefix at `~/.local` so packages land on the
+persistent partition instead of the read-only rootfs. You still need `node`/`npm`
+available — install them per-user (e.g. via [`nvm`](https://github.com/nvm-sh/nvm),
+`fnm`, or a `distrobox` container) so they too survive updates:
+
+```bash
+npm config set prefix "$HOME/.local"
+npm install -g @anthropic-ai/claude-code
+```
+
+### Authenticate
+
+Run the CLI once interactively and follow the login flow:
+
+```bash
+claude
+```
+
+This stores your credentials under `~/.claude/` (persistent), so you only do it
+once. Verify it works:
+
+```bash
+claude --version
+claude -p "hello" --output-format json
+```
+
+### After a SteamOS update
+
+Because everything lives in `~`, the CLI and your login **persist across
+updates** — there is nothing to reinstall. If `claude` ever stops being found,
+just re-check that `~/.local/bin` is on your `PATH`.
+
 ## Installation
 
 ### From source
